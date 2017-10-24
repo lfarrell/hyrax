@@ -214,22 +214,106 @@ RSpec.describe 'collection', type: :feature, clean_repo: true do
     end
   end
 
-  describe 'delete collection' do
+  describe 'delete collection with permissions set.' do
     let!(:collection) { create(:public_collection, user: user, with_permission_template: true) }
+    let(:admin_set_a) { create(:admin_set, creator: [admin_user.user_key], title: ['Set A'], with_permission_template: true) }
 
-    before do
-      sign_in user
-      visit '/dashboard/my/collections'
+    let(:collection1) do
+      create(:public_collection, user: user, description: ['collection description'], with_permission_template: true)
+    end
+    let!(:work1) { create(:work, title: ["King Louie"], member_of_collections: [collection1], user: user) }
+
+    context 'when user selects delete' do
+      before do
+        sign_in user
+        visit '/dashboard/my/collections'
+      end
+
+      it "deletes a collection" do
+        expect(page).to have_content(collection.title.first)
+        within('#document_' + collection.id) do
+          first('button.dropdown-toggle').click
+          first(".itemtrash").click
+          first(".btn-danger").click
+        end
+        expect(page).not_to have_content(collection.title.first)
+      end
     end
 
-    it "deletes a collection" do
-      expect(page).to have_content(collection.title.first)
-      within('#document_' + collection.id) do
-        first('button.dropdown-toggle').click
-        first(".itemtrash").click
-        first(".btn-danger").click
+    context 'when user selects cancel' do
+      before do
+        sign_in user
+        visit '/dashboard/my/collections'
       end
-      expect(page).not_to have_content(collection.title.first)
+
+      it "collection is not deleted" do
+        expect(page).to have_content(collection.title.first)
+        within('#document_' + collection.id) do
+          first('button.dropdown-toggle').click
+          first(".itemtrash").click
+          first(".btn-default").click
+        end
+        expect(page).to have_content(collection.title.first)
+      end
+    end
+
+    context 'delete an admin set that is empty' do
+      before do
+        admin_set_a
+        sign_in admin_user
+        visit '/dashboard/my/collections'
+      end
+
+      it "admin set is deleted" do
+        expect(page).to have_content(admin_set_a.title.first)
+        within('#document_' + admin_set_a.id) do
+          first('button.dropdown-toggle').click
+          first(".itemtrash").click
+          first(".btn-danger").click
+        end
+        expect(page).not_to have_content(admin_set_a.title.first)
+      end
+    end
+
+    context 'delete a collection that contains a work' do
+      before do
+        collection1
+        sign_in user
+        visit '/dashboard/my/collections'
+      end
+      it "collection with work is deleted" do
+        expect(page).to have_content(collection1.title.first)
+        within('#document_' + collection1.id) do
+          first('button.dropdown-toggle').click
+          first(".itemtrash").click
+          first(".btn-danger").click
+        end
+        expect(page).not_to have_content(collection1.title.first)
+      end
+    end
+
+    context 'when user without permissions selects delete' do
+      before do
+        create(:permission_template_access,
+               :deposit,
+               permission_template: collection1.permission_template,
+               agent_type: 'user',
+               agent_id: user.user_key)
+
+        collection1
+        sign_in user
+        visit '/dashboard/my/collections'
+      end
+
+      it "collection is not deleted" do
+        expect(page).to have_content(collection1.title.first)
+        within('#document_' + collection1.id) do
+          first('button.dropdown-toggle').click
+          first(".itemtrash").click
+          first(".btn-default").click
+        end
+        expect(page).to have_content(collection1.title.first)
+      end
     end
   end
 
@@ -390,6 +474,30 @@ RSpec.describe 'collection', type: :feature, clean_repo: true do
     let(:collection) { create(:named_collection, user: user, with_permission_template: true) }
     let!(:work1) { create(:work, title: ["King Louie"], member_of_collections: [collection], user: user) }
     let!(:work2) { create(:work, title: ["King Kong"], member_of_collections: [collection], user: user) }
+
+    context 'from dashboard -> collections action menu' do
+      before do
+        create(:permission_template_access,
+               :deposit,
+               permission_template: collection1.permission_template,
+               agent_type: 'user',
+               agent_id: user.user_key)
+
+        collection1
+        sign_in user
+        visit '/dashboard/my/collections'
+      end
+
+      it "edit denied because user does not have permissions" do
+        # URL: /dashboard/my/collections
+        expect(page).to have_content(collection1.title.first)
+        within("#document_#{collection1.id}") do
+          find('button.dropdown-toggle').click
+          click_link('Edit collection')
+        end
+        expect(page).to have_content(collection1.title.first)
+      end
+    end
 
     context 'from dashboard -> collections action menu' do
       before do
